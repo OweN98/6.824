@@ -24,6 +24,28 @@ type ExampleReply struct {
 
 // Add your RPC definitions here.
 
+// worker to Coor
+type AskTask struct {
+}
+
+type Report struct {
+	TaskType int
+	TaskID   int
+	FilesLoc []string
+}
+
+// Coor to worker
+type AssignTask struct {
+	TaskID   int
+	TaskType int
+	//TaskName   []string
+	MapFiles          string
+	IntermediateFiles []string
+	ReduceNum         int
+}
+
+type Receive struct {
+}
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
