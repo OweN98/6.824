@@ -469,8 +469,10 @@ func (cfg *config) checkTerms() int {
 			xterm, _ := cfg.rafts[i].GetState()
 			if term == -1 {
 				term = xterm
+				DPrintf("Server:%d, term: %d", cfg.rafts[i].me, term)
 			} else if term != xterm {
 				cfg.t.Fatalf("servers disagree on term")
+				DPrintf("mlgb")
 			}
 		}
 	}
