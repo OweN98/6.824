@@ -159,7 +159,7 @@ func (c *Coordinator) Done() bool {
 	defer c.mutex.Unlock()
 	if c.nMap == c.MapDone && c.nReduce == c.ReduceDone {
 		//log.Println("**********MR OVER**********")
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 8)
 		return true
 	}
 	return ret

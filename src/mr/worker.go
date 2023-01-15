@@ -47,8 +47,8 @@ func Worker(mapf func(string, string) []KeyValue,
 	for {
 		// Your worker implementation here.z
 		rand.Seed(time.Now().UnixNano())
-		r := rand.Intn(2)
-		time.Sleep(time.Duration(r) * time.Second)
+		r := rand.Intn(200) + 200
+		time.Sleep(time.Duration(r) * time.Millisecond)
 		ask := AskTask{}
 		task := AssignTask{}
 		res := call("Coordinator.Ask", &ask, &task)

@@ -19,3 +19,5 @@ In test_test.sh, tester stops for a while, so no network failure right now
 The docs in lab pages also says ***"for the leader to remain the leader if there are no failures"***, so the codes now can not do it.  
 The step to maintain leader is HeartBeat, the null AppendMessage will make Follower reset ElectionTimeout.
 So is the reason.
+
+Reason: In `ticker()`, the routine should sleep `ElectionTimeout` at first, then judge if necessary to start election. I got in wrong order to judge at first. Stupid mistake. I should go back to primary school.

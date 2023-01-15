@@ -221,40 +221,29 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// when >, be follower and vote
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-
-	thisTerm := rf.currentTerm
 	CandiTerm := args.Term
 	CandiID := args.CandidateID
 
-	if CandiTerm < thisTerm {
-		// reject and update the term of the "candidate"
-		reply.VoteGranted = false
-		reply.Term = thisTerm
-		DPrintf("[%d] Server %d, reject voteRequest from %d: TERM, reply %t", thisTerm, rf.me, CandiID, reply.VoteGranted)
-		return
-	}
-	// if have voted, the term is the same
-	if rf.votedFor != -1 && thisTerm == CandiTerm {
-		reply.VoteGranted = false
-		reply.Term = thisTerm
-		DPrintf("[%d] Server %d, reject voteRequest from %d: HAVE VOTED, reply %t", thisTerm, rf.me, CandiID, reply.VoteGranted)
-		return
-	}
-
-	if CandiTerm == thisTerm {
-		reply.VoteGranted = true
-		reply.Term = thisTerm
-		rf.resetTime()
-		rf.votedFor = CandiID
-		DPrintf("[%d]Server %d, vote for %d, reply %t", thisTerm, rf.me, CandiID, reply.VoteGranted)
-
-	} else {
+	if CandiTerm > rf.currentTerm {
 		reply.VoteGranted = true
 		reply.Term = CandiTerm
 		rf.enFollower(CandiTerm)
 		rf.votedFor = CandiID
-		DPrintf("[%d]Server %d update term from term %d, vote for %d, reply %t", CandiTerm, rf.me, thisTerm, CandiID, reply.VoteGranted)
+		DPrintf("[%d]Server %d update term from term %d, vote for %d, reply %t", CandiTerm, rf.me, rf.currentTerm, CandiID, reply.VoteGranted)
+	} else if rf.votedFor != -1 && rf.currentTerm == CandiTerm {
+		reply.VoteGranted = true
+		reply.Term = rf.currentTerm
+		rf.resetTime()
+		rf.votedFor = CandiID
+		DPrintf("[%d]Server %d, vote for %d, reply %t", rf.currentTerm, rf.me, CandiID, reply.VoteGranted)
+	} else {
+		reply.VoteGranted = false
+		reply.Term = rf.currentTerm
+		DPrintf("[%d] Server %d, reject voteRequest from %d: TERM, reply %t", rf.currentTerm, rf.me, CandiID, reply.VoteGranted)
+
 	}
+	return
+
 }
 
 //
@@ -327,12 +316,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// ae rpc / 1
 	if args.Term < rf.currentTerm {
 		return
-	}
-
-	// Rules for servers / All / 2
-	if args.Term > rf.currentTerm {
+	} else if args.Term >= rf.currentTerm {
 		rf.enFollower(args.Term)
 		rf.leaderID = args.LeaderID
+		rf.resetTime()
 		DPrintf("[%d]Server %d convert to Follower from term %d\n", args.Term, rf.me, rf.currentTerm)
 	}
 
@@ -343,14 +330,16 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		DPrintf("[%d]Server %d convert from Candidate to Follower\n", args.Term, rf.me)
 	}
 	// heartbeat message
-	if args.LogEntries == nil {
-		rf.enFollower(args.Term)
-		rf.leaderID = args.LeaderID
-		DPrintf("[%d]Server %d receive HeartBeat from Leader %d\n", args.Term, rf.me, args.LeaderID)
+	//if args.LogEntries == nil {
+	//	rf.enFollower(args.Term)
+	//	rf.votedFor = args.LeaderID
+	//	rf.leaderID = args.LeaderID
+	//	DPrintf("[%d]Server %d receive HeartBeat from Leader %d\n", args.Term, rf.me, args.LeaderID)
+	//
+	//} else {
+	//	DPrintf("[%d]Server %d receive HeartBeat with entries from Leader %d\n", args.Term, rf.me, args.LeaderID)
+	//}
 
-	} else {
-		DPrintf("[%d]Server %d receive HeartBeat with entries from Leader %d\n", args.Term, rf.me, args.LeaderID)
-	}
 	// ae rpc / 2
 	if args.PrevLogIndex > len(rf.logEntry)-1 {
 		//reply.NextIndex = 0
@@ -360,12 +349,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// when failed, the nextIndex should be decreased until the Follower's logEntry match Leader's.
 	if args.PrevLogIndex >= 0 &&
 		rf.logEntry[args.PrevLogIndex].Term != args.PrevLogTerm {
-		//for i := args.PrevLogIndex; i >= 0; i-- {
-		//	if rf.logEntry[i-1].Term != rf.logEntry[args.PrevLogIndex].Term {
-		//		reply.NextIndex = i
-		//		break
-		//	}
-		//}
+		for i := args.PrevLogIndex; i >= 0; i-- {
+			if rf.logEntry[i-1].Term != rf.logEntry[args.PrevLogIndex].Term {
+				reply.NextIndex = i
+				break
+			}
+		}
 		DPrintf("[%d]: Conflict in AppendEntries between leader %d and follower %d \n ", args.Term, args.LeaderID, rf.me)
 		return
 	}
@@ -443,14 +432,13 @@ func (rf *Raft) sendHeartBeat() {
 }
 
 func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
-
 	if rf.state != LEADER {
 		return
 	}
 	if reply.Term > rf.currentTerm {
 		// when leader finds its term out of date, reverts to Follower
 		rf.enFollower(reply.Term)
-
+		return
 	}
 	if reply.Success {
 
@@ -485,17 +473,13 @@ func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
 		if rf.nextIndex[i] > 0 {
 			rf.nextIndex[i] -= 1
 		}
-		//rf.sendHeartBeat()
+		rf.sendHeartBeat()
 	}
 	return
 }
 
 func (rf *Raft) goElection() {
 	rf.mu.Lock()
-	if rf.state == LEADER {
-		rf.mu.Unlock()
-		return
-	}
 	DPrintf("[%d] Server %d call election.\n", rf.currentTerm, rf.me)
 	rf.enCandidate()
 
@@ -641,21 +625,29 @@ func (rf *Raft) ticker() {
 		// Your code here to check if a leader election should
 		// be started and to randomize sleeping time using
 		// time.Sleep().
+		time.Sleep(rf.electionTimeout)
+
 		rf.mu.Lock()
 		state := rf.state
+		lasttimelive := rf.lastLiveTime
 		rf.mu.Unlock()
-		switch state {
-		case LEADER:
-			rf.sendHeartBeat()
-			time.Sleep(rf.heartBeatTimeout)
-		default:
-			time.Sleep(rf.electionTimeout)
-			duration := time.Millisecond * time.Duration(time.Now().UnixNano()-rf.lastLiveTime)
+		if state == LEADER {
+			continue
+		} else {
+			duration := time.Duration(time.Now().UnixNano() - lasttimelive)
 			if duration > rf.electionTimeout {
-				DPrintf("[%d]Server %d ElectionTimeout %d", rf.currentTerm, rf.me, duration)
+				DPrintf("[%d]Server %d meets ElectionTimeout over %dms", rf.currentTerm, rf.me, duration/1e6)
 				rf.goElection()
 			}
 		}
+	}
+}
+
+func (rf *Raft) broadcastHeartBeat() {
+	for rf.killed() == false && rf.state == LEADER {
+		rf.sendHeartBeat()
+		DPrintf("[%d]Server %d sends periodic heartbeat! HeartTimeout %s", rf.currentTerm, rf.me, rf.heartBeatTimeout)
+		time.Sleep(rf.heartBeatTimeout)
 	}
 }
 
@@ -666,8 +658,8 @@ func (rf *Raft) resetTime() {
 
 func (rf *Raft) resetElectionTimeout() {
 	rand.Seed(time.Now().UnixNano())
-	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(200)+200)
-	DPrintf("[%d]Server %d ElectionTimeout size resetted to %d", rf.currentTerm, rf.me, rf.electionTimeout)
+	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(150)+150)
+	DPrintf("[%d]Server %d ElectionTimeout size resetted to %dms", rf.currentTerm, rf.me, rf.electionTimeout/1e6)
 
 }
 
@@ -705,6 +697,7 @@ func (rf *Raft) enLeader() {
 	DPrintf("[%d]Server %d become leader.", rf.currentTerm, rf.me)
 	rand.Seed(time.Now().UnixNano())
 	rf.heartBeatTimeout = time.Millisecond * time.Duration(rand.Intn(50)+50)
+	go rf.broadcastHeartBeat()
 	//rf.sendHeartBeat()
 }
 
@@ -739,7 +732,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.matchIndex = make([]int, len(peers))
 	rf.applyCh = applyCh
 	rf.heartBeatTimeout = time.Millisecond * time.Duration(rand.Intn(50)+50)
-	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(200)+200)
+	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(150)+150)
 	rf.lastLiveTime = time.Now().UnixNano()
 	DPrintf(" [%d]Sever %d Initialized.\n", rf.currentTerm, rf.me)
 
