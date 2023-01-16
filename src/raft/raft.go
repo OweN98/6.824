@@ -21,7 +21,6 @@ import (
 	"log"
 	"math"
 	"math/rand"
-
 	//	"bytes"
 	"sync"
 	"sync/atomic"
@@ -297,12 +296,13 @@ type AppendEntriesReply struct {
 
 // follower needs to tell the leader the next index to send logEntry
 func (rf *Raft) getNextIndex() int {
-	lenLog := len(rf.logEntry)
-	if lenLog > 0 {
-		return rf.logEntry[lenLog-1].Index
-	} else {
-		return 0
-	}
+	return len(rf.logEntry)
+	//lenLog := len(rf.logEntry)
+	//if lenLog > 1 {
+	//	return rf.logEntry[lenLog-1].Index + 1
+	//} else {
+	//	return 1
+	//}
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
@@ -319,15 +319,14 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	} else if args.Term >= rf.currentTerm {
 		rf.enFollower(args.Term)
 		rf.leaderID = args.LeaderID
-		rf.resetTime()
-		DPrintf("[%d]Server %d convert to Follower from term %d\n", args.Term, rf.me, rf.currentTerm)
+		//DPrintf("[%d]Server %d convert to Follower from term %d\n", args.Term, rf.me, rf.currentTerm)
 	}
 
 	// Rules for servers / Candidates / 3
 	if rf.state == CANDIDATE {
 		rf.enFollower(args.Term)
 		rf.leaderID = args.LeaderID
-		DPrintf("[%d]Server %d convert from Candidate to Follower\n", args.Term, rf.me)
+		//DPrintf("[%d]Server %d convert from Candidate to Follower\n", args.Term, rf.me)
 	}
 	// heartbeat message
 	//if args.LogEntries == nil {
@@ -347,9 +346,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 	// when failed, the nextIndex should be decreased until the Follower's logEntry match Leader's.
-	if args.PrevLogIndex >= 0 &&
+	if args.PrevLogIndex > 0 &&
 		rf.logEntry[args.PrevLogIndex].Term != args.PrevLogTerm {
-		for i := args.PrevLogIndex; i >= 0; i-- {
+		for i := args.PrevLogIndex; i > 0; i-- {
 			if rf.logEntry[i-1].Term != rf.logEntry[args.PrevLogIndex].Term {
 				reply.NextIndex = i
 				break
@@ -361,22 +360,25 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	for _, entry := range args.LogEntries {
 		// ae rpc / 3
+		// entry conflicts
 		if entry.Index < len(rf.logEntry) && entry.Term != rf.logEntry[entry.Index].Term {
 			rf.logEntry = rf.logEntry[:entry.Index]
-			reply.NextIndex = entry.Index
-		}
-		// ae rpc / 4
-		if entry.Index >= len(rf.logEntry) {
-			rf.logEntry = append(rf.logEntry, entry)
 		}
 	}
-
+	// ae rpc / 4
+	// append new entries not in the log
+	rf.logEntry = append(rf.logEntry, args.LogEntries...)
+	rf.commitIndex = len(rf.logEntry) - 1
 	// ae rpc / 5
-	if args.LeaderCommit > rf.commitIndex {
+	if len(args.LogEntries) > 1 && args.LeaderCommit > rf.commitIndex {
 		rf.commitIndex = int(math.Min(float64(args.LeaderCommit), float64(args.LogEntries[len(args.LogEntries)-1].Index)))
 	}
 	reply.Success = true
-
+	reply.NextIndex = rf.getNextIndex()
+	rf.commitLogs()
+	if len(rf.logEntry) > 1 {
+		DPrintf("[%d]Server:%d, len = %d, command=%d", rf.currentTerm, rf.me, len(rf.logEntry), rf.logEntry[rf.getNextIndex()-1].Command)
+	}
 	return
 }
 
@@ -403,7 +405,7 @@ func (rf *Raft) sendHeartBeat() {
 			// 2B, entries will be appended
 			args.PrevLogIndex = rf.nextIndex[i] - 1
 			// when log exists
-			if args.PrevLogIndex >= 0 {
+			if args.PrevLogIndex > 0 {
 				args.PrevLogTerm = rf.logEntry[args.PrevLogIndex].Term
 			}
 			// leader needs to send
@@ -432,6 +434,7 @@ func (rf *Raft) sendHeartBeat() {
 }
 
 func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
+
 	if rf.state != LEADER {
 		return
 	}
@@ -457,11 +460,12 @@ func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
 				continue
 			}
 
-			if rf.matchIndex[j] > rf.matchIndex[i] {
+			if rf.matchIndex[j] >= rf.matchIndex[i] {
 				count_commit += 1
 			}
 		}
-
+		// an entry from its current term is committed once that entry is stored in a majority of servers
+		// in Paper 5.4.2
 		if count_commit*2 > len(rf.peers) &&
 			rf.commitIndex < rf.matchIndex[i] &&
 			rf.logEntry[rf.matchIndex[i]].Term == rf.currentTerm {
@@ -470,7 +474,7 @@ func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
 		}
 
 	} else {
-		if rf.nextIndex[i] > 0 {
+		if rf.nextIndex[i] > 1 {
 			rf.nextIndex[i] -= 1
 		}
 		rf.sendHeartBeat()
@@ -487,7 +491,7 @@ func (rf *Raft) goElection() {
 	candidateID := rf.me
 	lastLogIndex := len(rf.logEntry) - 1
 	lastLogTerm := 0
-	if lastLogIndex >= 0 {
+	if lastLogIndex > 0 {
 		lastLogTerm = rf.logEntry[lastLogIndex-1].Term
 	}
 	rf.mu.Unlock()
@@ -523,8 +527,6 @@ func (rf *Raft) goElection() {
 }
 
 func (rf *Raft) commitLogs() {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
 
 	if rf.commitIndex > len(rf.logEntry)-1 {
 		log.Fatal("Error in commitlogs")
@@ -532,9 +534,9 @@ func (rf *Raft) commitLogs() {
 
 	for i := rf.lastApplied + 1; i <= rf.commitIndex; i++ {
 		rf.applyCh <- ApplyMsg{
-			//CommandValid:  false,
+			CommandValid: true,
 			Command:      rf.logEntry[i].Command,
-			CommandIndex: i,
+			CommandIndex: rf.logEntry[i].Index,
 			// 2D
 			//SnapshotValid: false,
 			//Snapshot:      nil,
@@ -564,28 +566,27 @@ func (rf *Raft) commitLogs() {
 // put the command into logs
 // leader sends out AppendEntries RPCs
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
-	// term: CurrentTerm, help caller to detect if leader is later demoted
-	// index: log entry to see if the command has been submitted
+	//isleader: false if this server isn't the leader, client should try another
+	//term: currentTerm, to help caller detect if leader is later demoted
+	//index: log entry to watch to see if the command was committed
 	index := -1
 	term := -1
-	isLeader := true
+	isLeader := false
 
 	// Your code here (2B).
-	if !rf.killed() {
-		return index, term, isLeader
-	}
+	//if !rf.killed() {
+	//	return index, term, isLeader
+	//}
 
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-
-	term = rf.currentTerm
 	if rf.state != LEADER {
-		isLeader = false
 		return index, term, isLeader
 	} else {
-		if len(rf.logEntry) > 0 {
-			index = rf.logEntry[len(rf.logEntry)-1].Index
-		}
+		DPrintf("Start() called")
+		isLeader = true
+		index = rf.getNextIndex()
+		term = rf.currentTerm
 		logentry := logEntry{
 			Command: command,
 			Term:    term,
@@ -670,7 +671,7 @@ func (rf *Raft) enFollower(term int) {
 	rf.voteCount = 0
 	rf.currentTerm = term
 	rf.resetTime()
-	DPrintf("[%d]Sever %d become the Follower.\n", rf.currentTerm, rf.me)
+	//DPrintf("[%d]Sever %d become the Follower.\n", rf.currentTerm, rf.me)
 
 }
 
@@ -726,8 +727,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.currentTerm = 0
 	rf.leaderID = -1
 	rf.logEntry = []logEntry{}
-	rf.commitIndex = -1
-	rf.lastApplied = -1
+	rf.commitIndex = 0
+	rf.lastApplied = 0
 	rf.nextIndex = make([]int, len(peers))
 	rf.matchIndex = make([]int, len(peers))
 	rf.applyCh = applyCh
@@ -735,6 +736,13 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(150)+150)
 	rf.lastLiveTime = time.Now().UnixNano()
 	DPrintf(" [%d]Sever %d Initialized.\n", rf.currentTerm, rf.me)
+
+	// The first index of the servers is 1, so add one emtpy entries at first
+	rf.logEntry = append(rf.logEntry, logEntry{Index: 0})
+	for i := range rf.nextIndex {
+		rf.nextIndex[i] = 1
+
+	}
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
