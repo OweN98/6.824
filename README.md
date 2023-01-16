@@ -1,3 +1,6 @@
+Progress:  
+:heavy_check_mark::Lab 1, Lab 2A, Lab 2B basic agree
+
 ## Lab 2A:
 ![2A.png](Pics%2F2A.png)
 ### Bugs:
@@ -27,8 +30,8 @@ Reason: In `ticker()`, the routine should sleep `ElectionTimeout` at first, then
 
 ## Lab 2B:
 ### TestBasicAgree2B():
-![funcTestBasicAgree2B.png](Pics%2FfuncTestBasicAgree2B.png)
-![2BBasicAgree.png](Pics%2F2BBasicAgree.png)
+![funcTestBasicAgree2B.png](Pics%2FfuncTestBasicAgree2B.png)  
+![2BBasicAgree.png](Pics%2F2BBasicAgree.png)  
 Flow:  
 **The first index in log is "*1*", not '0', see detail in bugs**
 1. Initilization
