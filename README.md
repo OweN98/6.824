@@ -27,18 +27,20 @@ Reason: In `ticker()`, the routine should sleep `ElectionTimeout` at first, then
 
 ## Lab 2B:
 ### TestBasicAgree2B():
+![funcTestBasicAgree2B.png](Pics%2FfuncTestBasicAgree2B.png)
 ![2BBasicAgree.png](Pics%2F2BBasicAgree.png)
 Flow:  
 **The first index in log is "*1*", not '0', see detail in bugs**
-![funcTestBasicAgree2B.png](Pics%2FfuncTestBasicAgree2B.png)
 1. Initilization
 2. in for loops, keep sending command `100` to servers for 3 times.
 - `nd, cmd := cfg.nCommitted(index)` counts servers that think the log entry at index is committed. `nd` is the count number of servers that committed the entry. `cmd` is the command of this index.
 - `xindex := cfg.one(index*100, servers, false)` does a complete agreement. In a 10 seconds timeout for loop, it first pick out the leader right now and apply `Start(command)` to append new log entries to the leader. Then, if the leader exists, in a 2 seconds timeout loop, keep checking if other servers commit the new entries by using `nd, cmd1 := cfg.nCommitted(index)`. Of course servers will receive log entries included in periodic heartbeats.
-![2BBasic_Flow0.png](Pics%2F2BBasic_Flow0.png)
-- At last 
-
+  ![2BBasicAgreePrint0.png](Pics%2F2BBasicAgreePrint0.png)
+- At last, the agreement will apply command `100` to the servers for 3 times. 
+![2BBasicAgreePrint1.png](Pics%2F2BBasicAgreePrint1.png)
 #### Bugs:
-* ![2B_bug0.png](Pics%2F2B_bug0.png)
-    Forget to commit logs in Followers. 
-* ![2B_bug1.png](Pics%2F2B_bug1.png)
+* ![2B_bug0.png](Pics%2F2B_bug0.png)  
+    Only leader committed logs. Forget to commit logs in Followers.   
+* ![2B_bug1.png](Pics%2F2B_bug1.png)  
+    The first index should be 1, which has been told in Figure 2, why didn't I read it more clearly before.
+    
