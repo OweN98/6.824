@@ -61,8 +61,14 @@ Test that a follower participates after disconnect and re-connect.
 ![TestFailAgree2B_bug0Solution.png](Pics%2FTestFailAgree2B_bug0Solution.png)
 
 2. When the server re-connects to the network, the leader and other servers can't agree. The re-connected one will keep meeting ElectionTimeout and start election. The leader stops sending HeartBeat, the network crashed.  
-Solution: when the server comes back, its term should be larger than existing servers(it always asks for election). So when the leader send HeartBeat to the coming back server, the fresher term will reply false.
-Then the leader deal with the reply and update term itself.![TestFail2B_bug1Solution.png](Pics%2FTestFail2B_bug1Solution.png)
+Solution: when the server comes back, its term should be larger than existing servers(it always asks for election). So when the leader send HeartBeat to the coming back server, the fresher term will reply false. Then the leader deal with the reply and update term itself and be Follower to start election.![TestFail2B_bug1Solution.png](Pics%2FTestFail2B_bug1Solution.png)
 3. As the picture above, the lastIndex fails to update which means that the logs are not appended successfully to the previous missing server.  
 Solution: In `AppendEntries()`, if `args.PrevLogIndex > len(rf.logEntry)-1`, should not return immediately, or the new entries with older index will never be appended if the follower lacks older entries.
  ![TestFailAgree2B_bug2Solution.png](Pics%2FTestFailAgree2B_bug2Solution.png)  
+### TestFailNoAgree2B
+Most of the servers failed, so all of the entries will be uncommited, thus never apply. But when servers come back, start new election and keep going on.
+![TestFailNoAgree2B.png](Pics%2FTestFailNoAgree2B.png)
+
+### TestConcurrentStarts2B
+When several commands are requested concurrently, the leader ensure that one command is processed at one time. And no miss due to concurrency.
+![TestConcurrentStarts2B.png](Pics%2FTestConcurrentStarts2B.png)
