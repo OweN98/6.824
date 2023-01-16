@@ -353,7 +353,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.PrevLogIndex > len(rf.logEntry)-1 {
 		//reply.NextIndex = 0
 		DPrintf("[%d]Server %d PrevLogIndex %d> Server %d lastIndex %d", rf.currentTerm, args.LeaderID, args.PrevLogIndex, rf.me, len(rf.logEntry)-1)
-
 	}
 	// when failed, the nextIndex should be decreased until the Follower's logEntry match Leader's.
 	if args.PrevLogIndex > 0 && args.PrevLogIndex < len(rf.logEntry) &&
@@ -381,15 +380,21 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		}
 	}
 
-	rf.commitIndex = len(rf.logEntry) - 1
+	//rf.commitIndex = len(rf.logEntry) - 1
 	// ae rpc / 5
-	if len(args.LogEntries) > 1 && args.LeaderCommit > rf.commitIndex {
-		rf.commitIndex = int(math.Min(float64(args.LeaderCommit), float64(args.LogEntries[len(args.LogEntries)-1].Index)))
+	if len(rf.logEntry) > 1 && args.LeaderCommit > rf.commitIndex {
+		rf.commitIndex = int(math.Min(float64(args.LeaderCommit), float64(rf.logEntry[len(rf.logEntry)-1].Index)))
+		rf.commitLogs(rf.commitIndex)
+		//DPrintf("[%d]Server %d commits commitIndex: %d", rf.currentTerm, rf.me, rf.commitIndex)
 	}
+	//DPrintf("[%d]Server %d LeaderINdex: %d", rf.currentTerm, rf.me, args.LeaderCommit)
+	//DPrintf("[%d]Server %d commits commitIndex: %d", rf.currentTerm, rf.me, rf.commitIndex)
+
 	reply.Success = true
 	DPrintf("[%d]Server:%d lastIndex: %d, Leader:%d lastIndex: %d", rf.currentTerm, rf.me, len(rf.logEntry)-1, args.LeaderID, args.PrevLogIndex+1)
 	reply.NextIndex = rf.getNextIndex()
-	rf.commitLogs()
+
+	//rf.commitIndex = args.LeaderCommit
 	if len(rf.logEntry) > 1 {
 		DPrintf("[%d]Server:%d, len = %d, command=%d", rf.currentTerm, rf.me, len(rf.logEntry), rf.logEntry[rf.getNextIndex()-1].Command)
 	}
@@ -456,7 +461,8 @@ func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
 	if reply.Term > rf.currentTerm {
 		// when leader finds its term out of date, reverts to Follower
 		//rf.enFollower(reply.Term)
-		rf.currentTerm = reply.Term
+		// rf.currentTerm = reply.Term
+		rf.enFollower(reply.Term)
 		DPrintf("update leader's term")
 	}
 	if reply.Success {
@@ -488,17 +494,39 @@ func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
 			rf.commitIndex < rf.matchIndex[i] &&
 			rf.logEntry[rf.matchIndex[i]].Term == rf.currentTerm {
 			rf.commitIndex = rf.matchIndex[i]
-			rf.commitLogs()
+			rf.commitLogs(rf.commitIndex)
 		}
 
 	} else {
 		// Rules for Leaders / 3
 		if rf.nextIndex[i] > 1 {
 			rf.nextIndex[i] -= 1
+			rf.matchIndex[i] = rf.nextIndex[i] - 1
 		}
 		//rf.sendHeartBeat()
 	}
 	return
+}
+
+func (rf *Raft) commitLogs(commitindex int) {
+
+	if rf.commitIndex > len(rf.logEntry)-1 {
+		log.Fatal("Error in commitlogs")
+	}
+
+	for i := rf.lastApplied + 1; i <= commitindex; i++ {
+		rf.applyCh <- ApplyMsg{
+			CommandValid: true,
+			Command:      rf.logEntry[i].Command,
+			CommandIndex: rf.logEntry[i].Index,
+			// 2D
+			//SnapshotValid: false,
+			//Snapshot:      nil,
+			//SnapshotTerm:  0,
+			//SnapshotIndex: 0,
+		}
+	}
+	rf.lastApplied = rf.commitIndex
 }
 
 func (rf *Raft) goElection() {
@@ -543,27 +571,6 @@ func (rf *Raft) goElection() {
 			}(i)
 		}
 	}
-}
-
-func (rf *Raft) commitLogs() {
-
-	if rf.commitIndex > len(rf.logEntry)-1 {
-		log.Fatal("Error in commitlogs")
-	}
-
-	for i := rf.lastApplied + 1; i <= rf.commitIndex; i++ {
-		rf.applyCh <- ApplyMsg{
-			CommandValid: true,
-			Command:      rf.logEntry[i].Command,
-			CommandIndex: rf.logEntry[i].Index,
-			// 2D
-			//SnapshotValid: false,
-			//Snapshot:      nil,
-			//SnapshotTerm:  0,
-			//SnapshotIndex: 0,
-		}
-	}
-	rf.lastApplied = rf.commitIndex
 }
 
 //
