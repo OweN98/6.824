@@ -514,9 +514,10 @@ func (cfg *config) nCommitted(index int) (int, interface{}) {
 			}
 			count += 1
 			cmd = cmd1
-			DPrintf("Server: %d, okok, count:%d", i, count)
 		}
 	}
+	DPrintf("Count:%d", count)
+
 	return count, cmd
 }
 
@@ -586,13 +587,11 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 			}
 		}
 		if index != -1 {
-			//DPrintf("????")
-
 			// somebody claimed to be the leader and to have
 			// submitted our command; wait a while for agreement.
 			t1 := time.Now()
 			for time.Since(t1).Seconds() < 2 {
-				DPrintf("index: %d", index)
+				//DPrintf("index: %d", index)
 				nd, cmd1 := cfg.nCommitted(index)
 				// nd : how many server thinks have committed
 				DPrintf("nd: %d, cmd: %d, cmd1: %d", nd, cmd, cmd1)

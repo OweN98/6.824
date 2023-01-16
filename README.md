@@ -26,10 +26,10 @@ The docs in lab pages also says ***"for the leader to remain the leader if there
 The step to maintain leader is HeartBeat, the null AppendMessage will make Follower reset ElectionTimeout.
 So is the reason.
 
-Reason: In `ticker()`, the routine should sleep `ElectionTimeout` at first, then judge if necessary to start election. I got in wrong order to judge at first. Stupid mistake. I should go back to primary school.
+Solution: In `ticker()`, the routine should sleep `ElectionTimeout` at first, then judge the state(Follower/Candidate) to start election. I got in wrong order to judge at first. Stupid mistake. I should go back to primary school.
 
 ## Lab 2B:
-### TestBasicAgree2B():
+### TestBasicAgree2B:
 ![funcTestBasicAgree2B.png](Pics%2FfuncTestBasicAgree2B.png)  
 ![2BBasicAgree.png](Pics%2F2BBasicAgree.png)  
 Flow:  
@@ -46,4 +46,23 @@ Flow:
     Only leader committed logs. Forget to commit logs in Followers.   
 * ![2B_bug1.png](Pics%2F2B_bug1.png)  
     The first index should be 1, which has been told in Figure 2, why didn't I read it more clearly before.
-    
+
+### TestRPCBytes2B:
+each command is sent to each peer just once.
+![TestRPCBytes2B.png](Pics%2FTestRPCBytes2B.png)
+
+### TestFailAgree2B:
+Test that a follower participates after disconnect and re-connect.
+![TestFailAgree2B.png](Pics%2FTestFailAgree2B.png)
+![2BTestFailAgree.png](Pics%2F2BTestFailAgree.png)
+#### Bugs:
+1. After one of the server disconnect from the network, the leader and other servers can't agree. The leader itself can not commit?
+![TestFailAgree2B_bug0.png](Pics%2FTestFailAgree2B_bug0.png)  Solution: Forget to commit the log entries in Leader when entries are appended in `Start(command)`, so when the leader at last calculates count of the committed entries in the same index, the count is 1 less(not counting the leader). 
+![TestFailAgree2B_bug0Solution.png](Pics%2FTestFailAgree2B_bug0Solution.png)
+
+2. When the server re-connects to the network, the leader and other servers can't agree. The re-connected one will keep meeting ElectionTimeout and start election. The leader stops sending HeartBeat, the network crashed.  
+Solution: when the server comes back, its term should be larger than existing servers(it always asks for election). So when the leader send HeartBeat to the coming back server, the fresher term will reply false.
+Then the leader deal with the reply and update term itself.![TestFail2B_bug1Solution.png](Pics%2FTestFail2B_bug1Solution.png)
+3. As the picture above, the lastIndex fails to update which means that the logs are not appended successfully to the previous missing server.  
+Solution: In `AppendEntries()`, if `args.PrevLogIndex > len(rf.logEntry)-1`, should not return immediately, or the new entries with older index will never be appended if the follower lacks older entries.
+ ![TestFailAgree2B_bug2Solution.png](Pics%2FTestFailAgree2B_bug2Solution.png)  

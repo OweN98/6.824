@@ -223,6 +223,15 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	CandiTerm := args.Term
 	CandiID := args.CandidateID
 
+	if args.LastLogIndex > 0 && args.LastLogTerm < rf.logEntry[len(rf.logEntry)-1].Term ||
+		(args.LastLogTerm == rf.logEntry[len(rf.logEntry)-1].Term && args.LastLogIndex < len(rf.logEntry)-1) {
+		// Follower is more up-to-date
+		reply.VoteGranted = false
+		reply.Term = rf.currentTerm
+		DPrintf("[%d] Server %d has more up-to-date logs than Candidate %d, reject voteRequest, reply %t", rf.currentTerm, rf.me, CandiID, reply.VoteGranted)
+		return
+	}
+	// Candidate is mote up-to-date, keep on voting process
 	if CandiTerm > rf.currentTerm {
 		reply.VoteGranted = true
 		reply.Term = CandiTerm
@@ -230,6 +239,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.votedFor = CandiID
 		DPrintf("[%d]Server %d update term from term %d, vote for %d, reply %t", CandiTerm, rf.me, rf.currentTerm, CandiID, reply.VoteGranted)
 	} else if rf.votedFor != -1 && rf.currentTerm == CandiTerm {
+		// have voted
 		reply.VoteGranted = true
 		reply.Term = rf.currentTerm
 		rf.resetTime()
@@ -342,11 +352,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// ae rpc / 2
 	if args.PrevLogIndex > len(rf.logEntry)-1 {
 		//reply.NextIndex = 0
-		DPrintf("PrevLogIndex > last")
-		return
+		DPrintf("[%d]Server %d PrevLogIndex %d> Server %d lastIndex %d", rf.currentTerm, args.LeaderID, args.PrevLogIndex, rf.me, len(rf.logEntry)-1)
+
 	}
 	// when failed, the nextIndex should be decreased until the Follower's logEntry match Leader's.
-	if args.PrevLogIndex > 0 &&
+	if args.PrevLogIndex > 0 && args.PrevLogIndex < len(rf.logEntry) &&
 		rf.logEntry[args.PrevLogIndex].Term != args.PrevLogTerm {
 		for i := args.PrevLogIndex; i > 0; i-- {
 			if rf.logEntry[i-1].Term != rf.logEntry[args.PrevLogIndex].Term {
@@ -364,16 +374,20 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		if entry.Index < len(rf.logEntry) && entry.Term != rf.logEntry[entry.Index].Term {
 			rf.logEntry = rf.logEntry[:entry.Index]
 		}
+		// ae rpc / 4
+		// append new entries not in the log
+		if entry.Index >= len(rf.logEntry) {
+			rf.logEntry = append(rf.logEntry, entry)
+		}
 	}
-	// ae rpc / 4
-	// append new entries not in the log
-	rf.logEntry = append(rf.logEntry, args.LogEntries...)
+
 	rf.commitIndex = len(rf.logEntry) - 1
 	// ae rpc / 5
 	if len(args.LogEntries) > 1 && args.LeaderCommit > rf.commitIndex {
 		rf.commitIndex = int(math.Min(float64(args.LeaderCommit), float64(args.LogEntries[len(args.LogEntries)-1].Index)))
 	}
 	reply.Success = true
+	DPrintf("[%d]Server:%d lastIndex: %d, Leader:%d lastIndex: %d", rf.currentTerm, rf.me, len(rf.logEntry)-1, args.LeaderID, args.PrevLogIndex+1)
 	reply.NextIndex = rf.getNextIndex()
 	rf.commitLogs()
 	if len(rf.logEntry) > 1 {
@@ -403,11 +417,12 @@ func (rf *Raft) sendHeartBeat() {
 	for i := range rf.peers {
 		if i != rf.me && !rf.killed() {
 			// 2B, entries will be appended
-			args.PrevLogIndex = rf.nextIndex[i] - 1
+			args.PrevLogIndex = len(rf.logEntry) - 2
 			// when log exists
 			if args.PrevLogIndex > 0 {
 				args.PrevLogTerm = rf.logEntry[args.PrevLogIndex].Term
 			}
+			// Rules for servers / Leader / 3
 			// leader needs to send
 			if rf.nextIndex[i] < len(rf.logEntry) {
 				args.LogEntries = rf.logEntry[rf.nextIndex[i]:]
@@ -440,8 +455,9 @@ func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
 	}
 	if reply.Term > rf.currentTerm {
 		// when leader finds its term out of date, reverts to Follower
-		rf.enFollower(reply.Term)
-		return
+		//rf.enFollower(reply.Term)
+		rf.currentTerm = reply.Term
+		DPrintf("update leader's term")
 	}
 	if reply.Success {
 
@@ -456,9 +472,9 @@ func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
 		// TODO commit
 		count_commit := 0
 		for j := 0; j < len(rf.peers); j++ {
-			if j == rf.me {
-				continue
-			}
+			//if j == rf.me {
+			//	continue
+			//}
 
 			if rf.matchIndex[j] >= rf.matchIndex[i] {
 				count_commit += 1
@@ -466,18 +482,21 @@ func (rf *Raft) handleReply(i int, reply AppendEntriesReply) {
 		}
 		// an entry from its current term is committed once that entry is stored in a majority of servers
 		// in Paper 5.4.2
+
+		DPrintf("length of peers: %d, count_commit = %d", len(rf.peers), count_commit)
 		if count_commit*2 > len(rf.peers) &&
 			rf.commitIndex < rf.matchIndex[i] &&
 			rf.logEntry[rf.matchIndex[i]].Term == rf.currentTerm {
 			rf.commitIndex = rf.matchIndex[i]
-			go rf.commitLogs()
+			rf.commitLogs()
 		}
 
 	} else {
+		// Rules for Leaders / 3
 		if rf.nextIndex[i] > 1 {
 			rf.nextIndex[i] -= 1
 		}
-		rf.sendHeartBeat()
+		//rf.sendHeartBeat()
 	}
 	return
 }
@@ -593,6 +612,8 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 			Index:   index,
 		}
 		rf.logEntry = append(rf.logEntry, logentry)
+		rf.nextIndex[rf.me] = rf.getNextIndex()
+		rf.matchIndex[rf.me] = rf.nextIndex[rf.me] - 1
 	}
 	return index, term, isLeader
 }
@@ -659,7 +680,7 @@ func (rf *Raft) resetTime() {
 
 func (rf *Raft) resetElectionTimeout() {
 	rand.Seed(time.Now().UnixNano())
-	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(150)+150)
+	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(100)+300)
 	DPrintf("[%d]Server %d ElectionTimeout size resetted to %dms", rf.currentTerm, rf.me, rf.electionTimeout/1e6)
 
 }
@@ -697,7 +718,7 @@ func (rf *Raft) enLeader() {
 	}
 	DPrintf("[%d]Server %d become leader.", rf.currentTerm, rf.me)
 	rand.Seed(time.Now().UnixNano())
-	rf.heartBeatTimeout = time.Millisecond * time.Duration(rand.Intn(50)+50)
+	rf.heartBeatTimeout = time.Millisecond * time.Duration(rand.Intn(50)+100)
 	go rf.broadcastHeartBeat()
 	//rf.sendHeartBeat()
 }
@@ -732,8 +753,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.nextIndex = make([]int, len(peers))
 	rf.matchIndex = make([]int, len(peers))
 	rf.applyCh = applyCh
-	rf.heartBeatTimeout = time.Millisecond * time.Duration(rand.Intn(50)+50)
-	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(150)+150)
+	// The tester requires that the leader send heartbeat RPCs no more than ten times per second.
+	rf.heartBeatTimeout = time.Millisecond * time.Duration(rand.Intn(50)+100)
+	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(100)+300)
 	rf.lastLiveTime = time.Now().UnixNano()
 	DPrintf(" [%d]Sever %d Initialized.\n", rf.currentTerm, rf.me)
 
@@ -741,7 +763,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.logEntry = append(rf.logEntry, logEntry{Index: 0})
 	for i := range rf.nextIndex {
 		rf.nextIndex[i] = 1
-
 	}
 
 	// initialize from state persisted before a crash
