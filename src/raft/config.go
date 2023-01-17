@@ -506,7 +506,7 @@ func (cfg *config) nCommitted(index int) (int, interface{}) {
 		cfg.mu.Lock()
 		cmd1, ok := cfg.logs[i][index]
 		cfg.mu.Unlock()
-		DPrintf("Server: %d, index: %d, ok: %t", i, index, ok)
+		//DPrintf("Server: %d, index: %d, ok: %t", i, index, ok)
 		if ok {
 			if count > 0 && cmd != cmd1 {
 				cfg.t.Fatalf("committed values do not match: index %v, %v, %v",
@@ -516,7 +516,7 @@ func (cfg *config) nCommitted(index int) (int, interface{}) {
 			cmd = cmd1
 		}
 	}
-	DPrintf("Count:%d", count)
+	DPrintf("In all %d servers, %d servers think log entry %d is committed", len(cfg.rafts), count, index)
 
 	return count, cmd
 }

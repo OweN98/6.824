@@ -72,3 +72,15 @@ Most of the servers failed, so all of the entries will be uncommited, thus never
 ### TestConcurrentStarts2B
 When several commands are requested concurrently, the leader ensure that one command is processed at one time. And no miss due to concurrency.
 ![TestConcurrentStarts2B.png](Pics%2FTestConcurrentStarts2B.png)
+
+### TestRejoin2B
+Start -> Add entry 101 to the leader in network-> disconnect leader -> add entries 102, 103, 104 to privately to the missing leader -> add entry 103 to the network -> disconnect the current leader -> connect the old leader -> add entry 104 to network -> connect the second disconnected leader -> add entry 105 to network
+![TestRejoin2B.png](Pics%2FTestRejoin2B.png)
+#### Bug:
+1. Mistakenly set PrevlogIndex, so in `AppendEntries` RPC, the rules in 5.3 in paper which tells to find the latest two agreed log entry and delete the logs after that in Follower is not satisfied.
+![TestRejoin2B_bug0.png](Pics%2FTestRejoin2B_bug0.png)
+
+### TestBackup2B
+
+
+#### Bugs:
