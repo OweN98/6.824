@@ -81,6 +81,8 @@ Start -> Add entry 101 to the leader in network-> disconnect leader -> add entri
 ![TestRejoin2B_bug0.png](Pics%2FTestRejoin2B_bug0.png)
 
 ### TestBackup2B
-
+![PassTestBackup2B .png](Pics%2FPassTestBackup2B%20.png)
 
 #### Bugs:
+1. ![TestBackup2B_Bug0.png](Pics%2FTestBackup2B_Bug0.png)
+
