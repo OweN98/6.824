@@ -469,10 +469,10 @@ func (cfg *config) checkTerms() int {
 			xterm, _ := cfg.rafts[i].GetState()
 			if term == -1 {
 				term = xterm
-				DPrintf("Server:%d, term: %d", cfg.rafts[i].me, term)
+				//DPrintf("Server:%d, term: %d", cfg.rafts[i].me, term)
 			} else if term != xterm {
 				cfg.t.Fatalf("servers disagree on term, %d != %d", term, xterm)
-				DPrintf("mlgb")
+				//DPrintf("mlgb")
 			}
 		}
 	}
@@ -506,7 +506,7 @@ func (cfg *config) nCommitted(index int) (int, interface{}) {
 		cfg.mu.Lock()
 		cmd1, ok := cfg.logs[i][index]
 		cfg.mu.Unlock()
-		DPrintf("Server: %d, index: %d, ok: %t", i, index, ok)
+		//DPrintf("Server: %d, index: %d, ok: %t", i, index, ok)
 		if ok {
 			if count > 0 && cmd != cmd1 {
 				cfg.t.Fatalf("committed values do not match: index %v, %v, %v",
