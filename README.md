@@ -56,7 +56,7 @@ each command is sent to each peer just once.
 ![TestRPCBytes2B.png](Pics%2FTestRPCBytes2B.png)
 ### TestFailAgree2B:
 Test that a follower participates after disconnect and re-connect.  
-
+  
 ![TestFailAgree2B.png](Pics%2FTestFailAgree2B.png)
 ![2BTestFailAgree.png](Pics%2F2BTestFailAgree.png)  
 
@@ -65,7 +65,7 @@ Test that a follower participates after disconnect and re-connect.
 
 ![TestFailAgree2B_bug0.png](Pics%2FTestFailAgree2B_bug0.png)  
 Solution: Forget to commit the log entries in Leader when entries are appended in `Start(command)`, so when the leader at last calculates count of the committed entries in the same index, the count is 1 less(not counting the leader).   
-
+  
 ![TestFailAgree2B_bug0Solution.png](Pics%2FTestFailAgree2B_bug0Solution.png)
 
 2. When the server re-connects to the network, the leader and other servers can't agree. The re-connected one will keep meeting ElectionTimeout and start election. The leader stops sending HeartBeat, the network crashed.  
@@ -97,6 +97,11 @@ Start -> Add entry 101 to the leader in network-> disconnect leader -> add entri
 1. Mistakenly set PrevlogIndex, so in `AppendEntries` RPC, the rules in 5.3 in paper which tells to find the latest two agreed log entry and delete the logs after that in Follower is not satisfied.
 ![TestRejoin2B_bug0.png](Pics%2FTestRejoin2B_bug0.png)
 
+2. When now leader disconnects and old leader come back, the network started election, but keep election for a long time.
+  
+![TestRejoin2B_bug1.png](Pics%2FTestRejoin2B_bug1.png)
+
+Reason: Variable conflict
 ### TestBackup2B
 ![PassTestBackup2B .png](Pics%2FPassTestBackup2B%20.png)
 
