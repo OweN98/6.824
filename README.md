@@ -28,7 +28,10 @@ So is the reason.
 
 Solution: In `ticker()`, the routine should sleep `ElectionTimeout` at first, then judge the state(Follower/Candidate) to start election. I got in wrong order to judge at first. Stupid mistake. I should go back to primary school.
 
-## Lab 2B:
+## Lab 2B:  
+
+![PASSTest2B.png](Pics%2FPASSTest2B.png)  
+
 ### TestBasicAgree2B:
 ![funcTestBasicAgree2B.png](Pics%2FfuncTestBasicAgree2B.png)  
 ![2BBasicAgree.png](Pics%2F2BBasicAgree.png)  
@@ -109,6 +112,13 @@ Reason: Variable conflict
 1. When brings back the servers which are partitioned at first and a later disconnected server, the leader should be the later disconnected server for the reason that is has more up-to-date logs. Some problems exist in `VoteRequest`
    ![TestBackup2B_Bug0.png](Pics%2FTestBackup2B_Bug0.png)
 Solved. Forget to include "have voted" situation when `args.Term > rf.currentTerm`
-![TestBackup2B_Bug0_A.png](Pics%2FTestBackup2B_Bug0_A.png)  
+![TestBackup2B_Bug0_A.png](Pics%2FTestBackup2B_Bug0_A.png) 
+
+2. After bringing back the old leader, and select the up-to-date one as the leader, too many conflicting entries make the decrement of the `nextIndex[i]` to be very slow, so the test will fail.  
+
+![TestBackup2B_bug3.png](Pics%2FTestBackup2B_bug3.png)
+
+Solution: According to the paper, the follower can include the term of the conflicting entry and the first index it stores for that term. So it will reduce much time and pass the test.
+
 
 
