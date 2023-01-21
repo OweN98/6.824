@@ -1,5 +1,5 @@
 Progress:  
-:heavy_check_mark::Lab 1, Lab 2A, some test in Lab 2B
+:heavy_check_mark::Lab 1, 2A, 2B
 
 ## Lab 2A:
 ![2A.png](Pics%2F2A.png)
