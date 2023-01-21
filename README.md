@@ -32,6 +32,7 @@ Solution: In `ticker()`, the routine should sleep `ElectionTimeout` at first, th
 
 ![PASSTest2B.png](Pics%2FPASSTest2B.png)  
 
+Spend so much time on TestBackup2B :disappointed_relieved:
 ### TestBasicAgree2B:
 ![funcTestBasicAgree2B.png](Pics%2FfuncTestBasicAgree2B.png)  
 ![2BBasicAgree.png](Pics%2F2BBasicAgree.png)  
@@ -105,8 +106,22 @@ Start -> Add entry 101 to the leader in network-> disconnect leader -> add entri
 ![TestRejoin2B_bug1.png](Pics%2FTestRejoin2B_bug1.png)
 
 Reason: Variable conflict
-### TestBackup2B
+### TestBackup2B  
+
 ![PassTestBackup2B .png](Pics%2FPassTestBackup2B%20.png)
+
+| Server\Round |     1     |    2     |     3      |     4     |      5      |      6       |      7       |      8       |
+|:------------:|:---------:|:--------:|:----------:|:---------:|:-----------:|:------------:|:------------:|:------------:|
+|      0       | **[1]1*** | *[1]51** |    [1]x    |   [1]x    | **[50]51**  | **[50]101**  | **[50]101**  | **[50]102**  |
+|      1       | **[1]1**  |    x     | **[2]51*** | *[2]101** |    [2]x     |     [2]x     | **[50]101**  | **[50]102**  |
+|      2       | **[1]1**  |    x     | **[2]51**  | *[2]101*  |    [2]x     |     [2]x     | **[50]101**  | **[50]102**  |
+|      3       | **[1]1**  |    x     | **[2]51**  |   [5]x    | **[50]51*** | **[50]101*** | **[50]101*** | **[50]102*** |
+|      4       | **[1]1**  | *[1]51*  |   [25]x    |   [45]x   | **[50]51**  | **[50]101**  | **[50]101**  | **[50]102**  |  
+This is the basic demo procedure of the process, the number in the table means the `CommitIndex`, the [x] means the xth `term`, * means the actual `leader` in the network. x means the server is `disconnected`. The *Italic* means `not committed`. The **bold** means `committed`.  
+  
+One of the importance point is between round 4 and 5, that when old leader S0 is back. It at first sends new log(same term 1 as old leader's term) to the servers S3 & S4. S3 & S4 both have larger team to let S1 update its term. And S3 is more up-to-date because it has logs with larger term, it will not add the log. S0 sends to S4 which has the same logs as itself, also will not add logs. So the electionTimeout is not reset. Thus start election. The S3 is the last winner due to the logs with larger term. But it will take terms to finish. Sometimes the test fails because the leader is not selected after many rounds election. So I set the electionTimeout to be as seperated as possible like `rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(300)+200)`. As the 5.2 in paper says.  
+One more point is the update of `rf.nextIndex[]` when from round 4 - 5, the new leader S3 needs to send 50 logs in term 2 to S0 & S4. The original method is the decrease one by one, but it costs so many RPCs that the test fails early. The detail is in Bug 2.
+
 
 #### Bugs:  
 1. When brings back the servers which are partitioned at first and a later disconnected server, the leader should be the later disconnected server for the reason that is has more up-to-date logs. Some problems exist in `VoteRequest`
