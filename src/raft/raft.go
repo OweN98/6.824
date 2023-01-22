@@ -386,12 +386,12 @@ const (
 )
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
 	if rf.state == LEADER {
 		return
 	}
+
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 	rf.leaderID = args.LeaderID
 	DPrintf("[%d]Server %d receive heartbeat from leader %d,args.PrevLogIndex: %d, args.PrevLogTerm: %d, args.LeaderCommit:%d, rf.getLastIndex(): %d, lastLogTerm: %d , logLength: %d", rf.currentTerm, rf.me, rf.leaderID, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, rf.getLastIndex(), rf.logEntry[rf.getLastIndex()].Term, len(args.LogEntries))
 	reply.Success = false
@@ -425,9 +425,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// DPrintf("[%d]Server %d, %q, args.PrevLogIndex: %d, rf.getLastIndex(): %d, rf.logEntry[args.PrevLogIndex].Term: %d,  args.PrevLogTerm : %d", rf.currentTerm, rf.me, rf.state, args.PrevLogIndex, rf.getLastIndex(), rf.logEntry[args.PrevLogIndex].Term, args.PrevLogTerm)
 	if args.PrevLogIndex > 0 && args.PrevLogIndex <= rf.getLastIndex() &&
 		rf.logEntry[args.PrevLogIndex].Term != args.PrevLogTerm {
-		DPrintf("[%d]: Conflict in AppendEntries between leader %d and follower %d\n ", args.Term, args.LeaderID, rf.me)
+		DPrintf("[%d]: Conflict in AppendEntries between leader %d and follower %d", args.Term, args.LeaderID, rf.me)
 		//include the term of the conflicting entry and the first index it stores for that term.
-		for i := args.PrevLogIndex; i >= 0 && i > rf.lastApplied; i-- {
+		for i := args.PrevLogIndex; i > 0 && i > rf.lastApplied; i-- {
 			if rf.logEntry[i].Term != rf.logEntry[args.PrevLogIndex].Term {
 				reply.Next = i + 1
 				break
@@ -491,18 +491,24 @@ func (rf *Raft) sendHeartBeat() {
 				Term:         rf.currentTerm,
 				LeaderID:     rf.leaderID,
 				LeaderCommit: rf.commitIndex,
+				LogEntries:   nil,
 			}
 			// Rules for servers / Leader / 3
 			// leader needs to send
 			next := rf.nextIndex[i]
-			args.PrevLogIndex = next - 1
-			args.PrevLogTerm = rf.logEntry[next-1].Term
 			//DPrintf("[%d]Leader %d LeaderCommit %d ", rf.currentTerm, rf.me, rf.commitIndex)
 			DPrintf("[%d]Leader %d send to %d; next: %d, args last index: %d, leaderlast: %d", rf.currentTerm, rf.me, i, next, next-1, rf.getLastIndex())
 			if next <= rf.getLastIndex() {
+				args.PrevLogIndex = next - 1
 				args.LogEntries = rf.logEntry[next:]
+				args.PrevLogTerm = rf.logEntry[next-1].Term
 				//DPrintf("[%d]Leader %d sends entries from index %d to %d to server %d, len = %d", rf.currentTerm, rf.me, rf.nextIndex[i], len(rf.logEntry)-1, i, len(args.LogEntries))
 			}
+			//else {
+			//	args.PrevLogIndex = rf.getLastIndex()
+			//	args.LogEntries = rf.logEntry[rf.getLastIndex()+1:]
+			//	args.PrevLogTerm = rf.logEntry[args.PrevLogIndex].Term
+			//}
 			rf.mu.Unlock()
 			go func(i int) {
 				reply := AppendEntriesReply{}
@@ -572,7 +578,7 @@ func (rf *Raft) handleReply(i int, args AppendEntriesArgs, reply AppendEntriesRe
 			rf.nextIndex[i] = 1
 			rf.matchIndex[i] = 0
 		}
-		DPrintf("[%d]LogInconsistency Leader %d to server %d, nextINdex[%d]:%d", rf.currentTerm, rf.me, i, i, rf.nextIndex[i])
+		DPrintf("[%d]LogInconsistency Leader %d to server %d, nextIndex[%d]:%d", rf.currentTerm, rf.me, i, i, rf.nextIndex[i])
 	}
 }
 
@@ -688,12 +694,13 @@ func (rf *Raft) ticker() {
 		rf.mu.Lock()
 		state := rf.state
 		lasttimelive := rf.lastLiveTime
+		timeout := rf.electionTimeout
 		rf.mu.Unlock()
 		if state == LEADER {
 			continue
 		} else {
 			duration := time.Duration(time.Now().UnixNano() - lasttimelive)
-			if duration > rf.electionTimeout {
+			if duration > timeout {
 				//DPrintf("[%d]Server %d meets ElectionTimeout over %dms", rf.currentTerm, rf.me, duration/1e6)
 				rf.goElection()
 			}
