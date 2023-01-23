@@ -28,7 +28,7 @@ So is the reason.
 
 Solution: In `ticker()`, the routine should sleep `ElectionTimeout` at first, then judge the state(Follower/Candidate) to start election. I got in wrong order to judge at first. Stupid mistake. I should go back to primary school.
 
-## Lab 2B:  
+## Lab 2B:   
 
 ![PASSTest2B.png](Pics%2FPASSTest2B.png)  
 
