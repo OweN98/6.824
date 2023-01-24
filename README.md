@@ -1,5 +1,5 @@
 Progress:  
-:heavy_check_mark::Lab 1, 2A, 2B
+:heavy_check_mark::Lab 1, 2A, 2B, 2C
 
 ## Lab 2A:
 ![2A.png](Pics%2F2A.png)
@@ -124,10 +124,13 @@ One more point is the update of `rf.nextIndex[]` when from round 4 - 5, the new 
 
 
 #### Bugs:  
-1. When brings back the servers which are partitioned at first and a later disconnected server, the leader should be the later disconnected server for the reason that is has more up-to-date logs. Some problems exist in `VoteRequest`
-   ![TestBackup2B_Bug0.png](Pics%2FTestBackup2B_Bug0.png)
+1. When brings back the servers which are partitioned at first and a later disconnected server, the leader should be the later disconnected server for the reason that is has more up-to-date logs. Some problems exist in `VoteRequest`  
+
+   ![TestBackup2B_Bug0.png](Pics%2FTestBackup2B_Bug0.png)  
+
 Solved. Forget to include "have voted" situation when `args.Term > rf.currentTerm`
-![TestBackup2B_Bug0_A.png](Pics%2FTestBackup2B_Bug0_A.png) 
+![TestBackup2B_Bug0_A.png](Pics%2FTestBackup2B_Bug0_A.png)   
+
 
 2. After bringing back the old leader, and select the up-to-date one as the leader, too many conflicting entries make the decrement of the `nextIndex[i]` to be very slow, so the test will fail.  
 
@@ -135,5 +138,8 @@ Solved. Forget to include "have voted" situation when `args.Term > rf.currentTer
 
 Solution: According to the paper, the follower can include the term of the conflicting entry and the first index it stores for that term. So it will reduce much time and pass the test.
 
+## 2C
+If 2B is done perfectly, 2C is very easy to complete, just to finish `persist()` and `readPersist()`  
+![PASSTest2C.png](Pics%2FPASSTest2C.png)
 
-
+  In `TestFigure8Unreliable2C` which is the toughest test in 2C, generates large number of new logs and at the same time make the network in chaos. In my debugging process, the term came into chaos. By reading the **Term confusion** from the students-guide-to-raft from the lab page, I knew that my network is not able to cope with old RPC replies when chaos, so when the leader receive replies, compare the current term with the original term sent in original RPC. If different, drop the reply and return. And this works.
