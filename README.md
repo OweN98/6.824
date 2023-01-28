@@ -143,3 +143,17 @@ If 2B is done perfectly, 2C is very easy to complete, just to finish `persist()`
 ![PASSTest2C.png](Pics%2FPASSTest2C.png)
 
   In `TestFigure8Unreliable2C` which is the toughest test in 2C, generates large number of new logs and at the same time make the network in chaos. In my debugging process, the term came into chaos. By reading the **Term confusion** from the students-guide-to-raft from the lab page, I knew that my network is not able to cope with old RPC replies when chaos, so when the leader receive replies, compare the current term with the original term sent in original RPC. If different, drop the reply and return. And this works.
+  
+## 2D
+
+Main tasks:
+1. Write Snapshot codes  
+2. Rewrite all the variable about index and term. It's very annoying.
+
+### TestSnapshotBasic2D  
+Don't need to care about the InstallSnapshot RPC in the first test.
+![PASSTestSnapshotBasic2D.png](Pics%2FPASSTestSnapshotBasic2D.png)
+
+### TestSnapshotInstall2D  
+Much workload on rewriting true index and term in every place.
+![PASSTestSnapshotInstall2D.png](Pics%2FPASSTestSnapshotInstall2D.png)

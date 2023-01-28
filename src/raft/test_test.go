@@ -953,6 +953,7 @@ func TestFigure8Unreliable2C(t *testing.T) {
 
 		if leader != -1 && (rand.Int()%1000) < int(RaftElectionTimeout/time.Millisecond)/2 {
 			cfg.disconnect(leader)
+			DPrintf("%%%%%%%%%%%%%%%%%%%%%%%%Leader %d disconnected%%%%%%%%%%%%%%%%", leader)
 			nup -= 1
 		}
 
@@ -1143,6 +1144,7 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 	leader1 := cfg.checkOneLeader()
 
 	for i := 0; i < iters; i++ {
+		DPrintf("!!!!!!!!!!!!!!!!Round %d!!!!!!!!!!!!!!!!!!!!!!!!!", i)
 		victim := (leader1 + 1) % servers
 		sender := leader1
 		if i%3 == 1 {
@@ -1151,16 +1153,20 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 		}
 
 		if disconnect {
+			DPrintf("!!!!!!!!!!!!!!!!Disconnect server %d!!!!!!!!!!!!!!!!!!!!!!!!!", victim)
 			cfg.disconnect(victim)
 			cfg.one(rand.Int(), servers-1, true)
 		}
 		if crash {
+			DPrintf("!!!!!!!!!!!!!!!!Crash server %d!!!!!!!!!!!!!!!!!!!!!!!!!", victim)
 			cfg.crash1(victim)
 			cfg.one(rand.Int(), servers-1, true)
 		}
 
 		// perhaps send enough to get a snapshot
 		nn := (SnapShotInterval / 2) + (rand.Int() % SnapShotInterval)
+		DPrintf("!!!!!!!!!!!!!!!!send %d to get a snapshot!!!!!!!!!!!!!!!!!!!!!!!!!", nn)
+
 		for i := 0; i < nn; i++ {
 			cfg.rafts[sender].Start(rand.Int())
 		}
@@ -1170,6 +1176,7 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			// make sure all followers have caught up, so that
 			// an InstallSnapshot RPC isn't required for
 			// TestSnapshotBasic2D().
+			DPrintf("!!!!!!!!!!!!!!!!!make sure all followers have caught up!!!!!!!!!!!!!!!!!!!!!!!!")
 			cfg.one(rand.Int(), servers, true)
 		} else {
 			cfg.one(rand.Int(), servers-1, true)
@@ -1181,6 +1188,7 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 		if disconnect {
 			// reconnect a follower, who maybe behind and
 			// needs to rceive a snapshot to catch up.
+			DPrintf("!!!!!!!!!!!!!!!!C 		onnect server %d!!!!!!!!!!!!!!!!!!!!!!!!!", victim)
 			cfg.connect(victim)
 			cfg.one(rand.Int(), servers, true)
 			leader1 = cfg.checkOneLeader()
