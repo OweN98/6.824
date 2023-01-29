@@ -1,5 +1,7 @@
 Progress:  
 :heavy_check_mark::Lab 1, 2A, 2B, 2C
+# Lab 2  
+![PASS2.png](Pics%2FPASS2.png)  
 
 ## Lab 2A:
 ![2A.png](Pics%2F2A.png)
@@ -98,7 +100,8 @@ Start -> Add entry 101 to the leader in network-> disconnect leader -> add entri
 ![TestRejoin2B.png](Pics%2FTestRejoin2B.png)  
 
 #### Bug:
-1. Mistakenly set PrevlogIndex, so in `AppendEntries` RPC, the rules in 5.3 in paper which tells to find the latest two agreed log entry and delete the logs after that in Follower is not satisfied.
+1. Mistakenly set PrevlogIndex, so in `AppendEntries` RPC, the rules in 5.3 in paper which tells to find the latest two agreed log entry and delete the logs after that in Follower is not satisfied.  
+
 ![TestRejoin2B_bug0.png](Pics%2FTestRejoin2B_bug0.png)
 
 2. When now leader disconnects and old leader come back, the network started election, but keep election for a long time.
@@ -117,6 +120,8 @@ Reason: Variable conflict
 |      2       | **[1]1**  |    x     | **[2]51**  | *[2]101*  |    [2]x     |     [2]x     | **[50]101**  | **[50]102**  |
 |      3       | **[1]1**  |    x     | **[2]51**  |   [5]x    | **[50]51*** | **[50]101*** | **[50]101*** | **[50]102*** |
 |      4       | **[1]1**  | *[1]51*  |   [25]x    |   [45]x   | **[50]51**  | **[50]101**  | **[50]101**  | **[50]102**  |  
+
+  
 This is the basic demo procedure of the process, the number in the table means the `CommitIndex`, the [x] means the xth `term`, * means the actual `leader` in the network. x means the server is `disconnected`. The *Italic* means `not committed`. The **bold** means `committed`.  
   
 One of the importance point is between round 4 and 5, that when old leader S0 is back. It at first sends new log(same term 1 as old leader's term) to the servers S3 & S4. S3 & S4 both have larger team to let S1 update its term. And S3 is more up-to-date because it has logs with larger term, it will not add the log. S0 sends to S4 which has the same logs as itself, also will not add logs. So the electionTimeout is not reset. Thus start election. The S3 is the last winner due to the logs with larger term. But it will take terms to finish. Sometimes the test fails because the leader is not selected after many rounds election. So I set the electionTimeout to be as seperated as possible like `rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(300)+200)`. As the 5.2 in paper says.  
@@ -124,11 +129,11 @@ One more point is the update of `rf.nextIndex[]` when from round 4 - 5, the new 
 
 
 #### Bugs:  
-1. When brings back the servers which are partitioned at first and a later disconnected server, the leader should be the later disconnected server for the reason that is has more up-to-date logs. Some problems exist in `VoteRequest`  
+1. When brings back the servers which are partitioned at first and a later disconnected server, the leader should be the later disconnected server for the reason that is has more up-to-date logs. Some problems exist in `VoteRequest`.
 
-   ![TestBackup2B_Bug0.png](Pics%2FTestBackup2B_Bug0.png)  
+![TestBackup2B_Bug0.png](Pics%2FTestBackup2B_Bug0.png)  
 
-Solved. Forget to include "have voted" situation when `args.Term > rf.currentTerm`
+Solved. Forget to include "have voted" situation when `args.Term > rf.currentTerm`  
 ![TestBackup2B_Bug0_A.png](Pics%2FTestBackup2B_Bug0_A.png)   
 
 
@@ -139,21 +144,48 @@ Solved. Forget to include "have voted" situation when `args.Term > rf.currentTer
 Solution: According to the paper, the follower can include the term of the conflicting entry and the first index it stores for that term. So it will reduce much time and pass the test.
 
 ## 2C
-If 2B is done perfectly, 2C is very easy to complete, just to finish `persist()` and `readPersist()`  
-![PASSTest2C.png](Pics%2FPASSTest2C.png)
+If 2B is done perfectly, 2C is very easy to complete, just to finish `persist()` and `readPersist()`    
+
+![PASSTest2C.png](Pics%2FPASSTest2C.png)  
+
 
   In `TestFigure8Unreliable2C` which is the toughest test in 2C, generates large number of new logs and at the same time make the network in chaos. In my debugging process, the term came into chaos. By reading the **Term confusion** from the students-guide-to-raft from the lab page, I knew that my network is not able to cope with old RPC replies when chaos, so when the leader receive replies, compare the current term with the original term sent in original RPC. If different, drop the reply and return. And this works.
   
-## 2D
+## 2D  
+![PASS2D.png](Pics%2FPASS2D.png)  
 
 Main tasks:
 1. Write Snapshot codes  
 2. Rewrite all the variable about index and term. It's very annoying.
 
 ### TestSnapshotBasic2D  
-Don't need to care about the InstallSnapshot RPC in the first test.
+Don't need to care about the InstallSnapshot RPC in the first test.  
+
 ![PASSTestSnapshotBasic2D.png](Pics%2FPASSTestSnapshotBasic2D.png)
 
 ### TestSnapshotInstall2D  
-Much workload on rewriting true index and term in every place.
+Much workload on rewriting true index and term in every place.  
+
 ![PASSTestSnapshotInstall2D.png](Pics%2FPASSTestSnapshotInstall2D.png)
+
+### TestSnapshotInstallUnreliable2D  
+
+![PASSTestSnapshotInstallUnreliable2D.png](Pics%2FPASSTestSnapshotInstallUnreliable2D.png)
+
+#### Bugs:  
+
+1. In this crash test, the server will crash and when it comes back, it will recall `Make()`. It needs to assign the `rf.lastApplied = rf.lastIncludedIndex` which is read from the persistence.  
+![TestSnapshotInstallCrash2D_Bug0.png](Pics%2FTestSnapshotInstallCrash2D_Bug0.png)
+
+### TestSnapshotInstallUnCrash2D
+
+![PASSTestSnapshotInstallUnCrash2D.png](Pics%2FPASSTestSnapshotInstallUnCrash2D.png)  
+
+### TestSnapshotAllCrash2D  
+
+![PASSTestSnapshotAllCrash2D.png](Pics%2FPASSTestSnapshotAllCrash2D.png)
+
+#### Bugs:
+1. Almost the same as before, but this time is `rf.commitIndex = rf.lastIncludedIndex` after `Make()`  
+
+![TestSnapshotAllCrash2D_Bug0.png](Pics%2FTestSnapshotAllCrash2D_Bug0.png)

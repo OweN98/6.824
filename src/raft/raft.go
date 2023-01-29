@@ -725,7 +725,7 @@ func (rf *Raft) commitlogTicker() {
 		rf.mu.Unlock()
 		for _, m := range mess {
 			rf.applyCh <- m
-			DPrintf("[%d]Server %d, %q, commit %d", rf.currentTerm, rf.me, rf.state, m.CommandIndex)
+			//DPrintf("[%d]Server %d, %q, commit %d", rf.currentTerm, rf.me, rf.state, m.CommandIndex)
 		}
 
 	}
@@ -914,7 +914,7 @@ func (rf *Raft) resetTime() {
 
 func (rf *Raft) resetElectionTimeout() {
 	rand.Seed(time.Now().UnixNano())
-	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(200)+300)
+	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(400)+200)
 	//DPrintf("[%d]Server %d ElectionTimeout size resetted to %dms", rf.currentTerm, rf.me, rf.electionTimeout/1e6)
 
 }
@@ -986,14 +986,11 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.applyCh = applyCh
 	// The tester requires that the leader send heartbeat RPCs no more than ten times per second.
 	rf.heartBeatTimeout = time.Millisecond * time.Duration(rand.Intn(50)+100)
-	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(200)+300)
+	rf.electionTimeout = time.Millisecond * time.Duration(rand.Intn(400)+200)
 	rf.lastLiveTime = time.Now().UnixNano()
 	//DPrintf(" [%d]Sever %d Initialized.\n", rf.currentTerm, rf.me)
 	rf.lastIncludedIndex = 0
 	rf.lastIncludedTerm = 0
-	if rf.lastIncludedIndex > 0 {
-		rf.lastApplied = rf.lastIncludedIndex
-	}
 	// The first index of the servers is 1, so add one emtpy entries at first
 	rf.logEntry = append(rf.logEntry, logEntry{Index: 0})
 	for i := range rf.nextIndex {
@@ -1002,7 +999,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
-
+	if rf.lastIncludedIndex > 0 {
+		rf.lastApplied = rf.lastIncludedIndex
+		rf.commitIndex = rf.lastIncludedIndex
+	}
 	// start ticker goroutine to start elections
 	go rf.ticker()
 
