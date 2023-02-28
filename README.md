@@ -1,5 +1,5 @@
-Progress:  
-:heavy_check_mark::Lab 1, 2
+Notes:
+
 # Lab 2  
 ![PASS2.png](Pics%2FPASS2.png)  
 
@@ -109,9 +109,7 @@ Start -> Add entry 101 to the leader in network-> disconnect leader -> add entri
 ![TestRejoin2B_bug1.png](Pics%2FTestRejoin2B_bug1.png)
 
 Reason: Variable conflict
-### TestBackup2B  
-
-![PassTestBackup2B .png](Pics%2FPassTestBackup2B%20.png)
+### TestBackup2B
 
 | Server\Round |     1     |    2     |     3      |     4     |      5      |      6       |      7       |      8       |
 |:------------:|:---------:|:--------:|:----------:|:---------:|:-----------:|:------------:|:------------:|:------------:|
